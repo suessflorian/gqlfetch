@@ -1,0 +1,1 @@
+# GraphQL Introspection to SDL

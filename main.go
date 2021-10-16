@@ -72,17 +72,12 @@ func printSchema(schema GraphQLSchema) string {
 
 func printDirectives(sb *strings.Builder, directives []Directive) {
 	for _, directive := range directives {
-		if directive.Description != "" {
-			sb.WriteString(fmt.Sprintf(`"""%s"""`, directive.Description))
-		}
-		sb.WriteString(fmt.Sprintf("\ndirective @%s", directive.Name))
+		printDescription(sb, directive.Description)
+		sb.WriteString(fmt.Sprintf("directive @%s", directive.Name))
 		if len(directive.Args) > 0 {
 			sb.WriteString("(\n")
 			for _, arg := range directive.Args {
-				if arg.Description != "" {
-					sb.WriteString(fmt.Sprintf(`"""%s"""`, arg.Description))
-					sb.WriteString("\n")
-				}
+				printDescription(sb, arg.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", arg.Name, arg.Type.String()))
 			}
 			sb.WriteString("\n)")
@@ -98,13 +93,20 @@ func printDirectives(sb *strings.Builder, directives []Directive) {
 	}
 }
 
+func printDescription(sb *strings.Builder, description string) {
+	if description != "" {
+		sb.WriteString("\n")
+		sb.WriteString(fmt.Sprintf(`"""%s"""`, description))
+		sb.WriteString("\n")
+	}
+}
+
 func printTypes(sb *strings.Builder, types []Types) {
 	for _, typ := range types {
-		if typ.Description != "" {
-			sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
-			sb.WriteString("\n")
-		}
+		printDescription(sb, typ.Description)
+
 		switch typ.Kind {
+
 		case ast.Object:
 			sb.WriteString(fmt.Sprintf("type %s ", typ.Name))
 			if len(typ.Interfaces) > 0 {
@@ -118,13 +120,11 @@ func printTypes(sb *strings.Builder, types []Types) {
 			}
 			sb.WriteString("{\n")
 			for _, field := range typ.Fields {
-				if typ.Description != "" {
-					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
-					sb.WriteString("\n")
-				}
+				printDescription(sb, field.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
+
 		case ast.Union:
 			sb.WriteString(fmt.Sprintf("union %s =", typ.Name))
 			var possible []*Type
@@ -137,6 +137,7 @@ func printTypes(sb *strings.Builder, types []Types) {
 					sb.WriteString(" | ")
 				}
 			}
+
 		case ast.Enum:
 			sb.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
 			var enumValues ast.EnumValueList
@@ -144,32 +145,26 @@ func printTypes(sb *strings.Builder, types []Types) {
 				panic(err)
 			}
 			for _, value := range enumValues {
-				if typ.Description != "" {
-					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
-					sb.WriteString("\n")
-				}
+				printDescription(sb, value.Description)
 				sb.WriteString(fmt.Sprintf("%s\n", value.Name))
 			}
 			sb.WriteString("}")
+
 		case ast.Scalar:
 			sb.WriteString(fmt.Sprintf("scalar %s", typ.Name))
+
 		case ast.InputObject:
 			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
 			for _, field := range typ.Fields {
-				if typ.Description != "" {
-					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
-					sb.WriteString("\n")
-				}
+				printDescription(sb, typ.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
+
 		case ast.Interface:
 			sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
 			for _, field := range typ.Fields {
-				if typ.Description != "" {
-					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
-					sb.WriteString("\n")
-				}
+				printDescription(sb, typ.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
@@ -242,8 +237,6 @@ type Directive struct {
 		DefaultValue interface{} `json:"defaultValue"`
 	} `json:"args"`
 }
-
-// biggest challenge will be transforming introspection result to this `ast.Type`
 
 type introspectedType struct {
 	Kind   TypeKind          `json:"kind"`

@@ -15,9 +15,10 @@ func main() {
 ```
 
 ### Or use as cli tool
+Introduced a directory here `/gqlfetch` which will create a `gqlfetch` cli tool.
 
 ```bash
-go get github.com/suessflorian/gqlfetch
+go install github.com/suessflorian/gqlfetch/gqlfetch@v1.0.0
 gqlfetch --endpoint "localhost:8080/query" > schema.graphql
 ```
 

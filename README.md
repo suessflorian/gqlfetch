@@ -18,7 +18,7 @@ func main() {
 Introduced a directory here `/gqlfetch` which will create a `gqlfetch` cli tool.
 
 ```bash
-go install github.com/suessflorian/gqlfetch/gqlfetch@v1.0.0
+go install github.com/suessflorian/gqlfetch/gqlfetch@v0.2.2
 gqlfetch --endpoint "localhost:8080/query" > schema.graphql
 ```
 

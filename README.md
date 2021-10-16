@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-  schema, _ := gqlfetch.BuildClientSchema(ctx, endpoint)
+	schema, _ := gqlfetch.BuildClientSchema(ctx, endpoint)
 }
 ```
 

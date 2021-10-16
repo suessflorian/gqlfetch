@@ -60,8 +60,26 @@ func main() {
 	fmt.Println(printSchema(schemaResponse.Data.Schema))
 }
 
+type tabbedStringBuilder struct {
+	sb          *strings.Builder
+	IndentLevel int
+}
+
+func (sb *tabbedStringBuilder) WriteString(s string) {
+	if sb.IndentLevel != 0 {
+		sb.sb.WriteString(strings.Repeat("\t", sb.IndentLevel))
+	}
+	sb.sb.WriteString(s)
+}
+
+func (sb *tabbedStringBuilder) String() string {
+	return sb.sb.String()
+}
+
 func printSchema(schema GraphQLSchema) string {
-	sb := &strings.Builder{}
+	sb := &tabbedStringBuilder{
+		sb: &strings.Builder{},
+	}
 
 	printDirectives(sb, schema.Directives)
 	sb.WriteString("\n")
@@ -70,17 +88,19 @@ func printSchema(schema GraphQLSchema) string {
 	return sb.String()
 }
 
-func printDirectives(sb *strings.Builder, directives []Directive) {
+func printDirectives(sb *tabbedStringBuilder, directives []Directive) {
 	for _, directive := range directives {
 		printDescription(sb, directive.Description)
 		sb.WriteString(fmt.Sprintf("directive @%s", directive.Name))
 		if len(directive.Args) > 0 {
 			sb.WriteString("(\n")
+			sb.IndentLevel += 1
 			for _, arg := range directive.Args {
 				printDescription(sb, arg.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", arg.Name, arg.Type.String()))
 			}
-			sb.WriteString("\n)")
+			sb.IndentLevel -= 1
+			sb.WriteString(")")
 		}
 
 		sb.WriteString(" on ")
@@ -90,18 +110,19 @@ func printDirectives(sb *strings.Builder, directives []Directive) {
 				sb.WriteString(" | ")
 			}
 		}
+		sb.WriteString("\n")
+		sb.WriteString("\n")
 	}
 }
 
-func printDescription(sb *strings.Builder, description string) {
+func printDescription(sb *tabbedStringBuilder, description string) {
 	if description != "" {
-		sb.WriteString("\n")
 		sb.WriteString(fmt.Sprintf(`"""%s"""`, description))
 		sb.WriteString("\n")
 	}
 }
 
-func printTypes(sb *strings.Builder, types []Types) {
+func printTypes(sb *tabbedStringBuilder, types []Types) {
 	for _, typ := range types {
 		printDescription(sb, typ.Description)
 
@@ -119,10 +140,12 @@ func printTypes(sb *strings.Builder, types []Types) {
 				}
 			}
 			sb.WriteString("{\n")
+			sb.IndentLevel += 1
 			for _, field := range typ.Fields {
 				printDescription(sb, field.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
+			sb.IndentLevel -= 1
 			sb.WriteString("}")
 
 		case ast.Union:
@@ -144,10 +167,12 @@ func printTypes(sb *strings.Builder, types []Types) {
 			if err := json.Unmarshal(typ.EnumValues, &enumValues); err != nil {
 				panic(err)
 			}
+			sb.IndentLevel += 1
 			for _, value := range enumValues {
 				printDescription(sb, value.Description)
 				sb.WriteString(fmt.Sprintf("%s\n", value.Name))
 			}
+			sb.IndentLevel -= 1
 			sb.WriteString("}")
 
 		case ast.Scalar:
@@ -155,23 +180,28 @@ func printTypes(sb *strings.Builder, types []Types) {
 
 		case ast.InputObject:
 			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
+			sb.IndentLevel += 1
 			for _, field := range typ.Fields {
 				printDescription(sb, typ.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
+			sb.IndentLevel -= 1
 			sb.WriteString("}")
 
 		case ast.Interface:
 			sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
+			sb.IndentLevel += 1
 			for _, field := range typ.Fields {
 				printDescription(sb, typ.Description)
 				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
+			sb.IndentLevel -= 1
 			sb.WriteString("}")
 
 		default:
 			panic(fmt.Sprint("not handling", typ.Kind))
 		}
+		sb.WriteString("\n")
 		sb.WriteString("\n")
 	}
 }
@@ -238,19 +268,6 @@ type Directive struct {
 	} `json:"args"`
 }
 
-type introspectedType struct {
-	Kind   TypeKind          `json:"kind"`
-	Name   *string           `json:"name"`
-	OfType *introspectedType `json:"ofType"`
-}
-
-type TypeKind string
-
-const (
-	NON_NULL TypeKind = "NON_NULL"
-	LIST     TypeKind = "LIST"
-)
-
 type Type struct {
 	ast.Type
 }
@@ -288,3 +305,16 @@ func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
 
 	return nil
 }
+
+type introspectedType struct {
+	Kind   TypeKind          `json:"kind"`
+	Name   *string           `json:"name"`
+	OfType *introspectedType `json:"ofType"`
+}
+
+type TypeKind string
+
+const (
+	NON_NULL TypeKind = "NON_NULL"
+	LIST     TypeKind = "LIST"
+)

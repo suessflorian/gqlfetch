@@ -1,4 +1,4 @@
-package main
+package gqlfetch
 
 import (
 	"bytes"
@@ -6,93 +6,54 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
 	"time"
 )
 
 //go:embed introspectQuery.graphql
 var introspectSchema string
+type ServerConfig struct {
+	Endpoint string
+	Headers  http.Header
+}
 
-const DEFAULT_ENDPOINT = "http://localhost:8080/query"
-
-func main() {
-	var endpoint string
-	headers := make(headers)
-
-	flag.StringVar(&endpoint, "endpoint", DEFAULT_ENDPOINT, "GraphQL server endpoint")
-	flag.Var(&headers, "header", "Headers to be passed endpoint (can appear multiple times)")
-	flag.Parse()
-
+func BuildClientSchema(ctx context.Context, cfg ServerConfig) (string, error) {
 	buffer := new(bytes.Buffer)
-	err := json.NewEncoder(buffer).Encode(graphQLRequest{Query: introspectSchema})
-	if err != nil {
-		log.Fatal(err)
+	if err := json.NewEncoder(buffer).Encode(struct{ Query string }{Query: introspectSchema}); err != nil {
+		return "", fmt.Errorf("failed to prepare introspection query request: %w", err)
 	}
 
-	client := http.Client{Timeout: 2 * time.Minute}
-	req, err := http.NewRequest(http.MethodPost, endpoint, buffer)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.Endpoint, buffer)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to create query request: %w", err)
 	}
 
-	req.Header = http.Header(headers)
+	req.Header = http.Header(cfg.Headers)
 	req.Header.Add("Content-Type", "application/json")
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-
-	res, err := client.Do(req.WithContext(ctx))
+	client := http.Client{Timeout: 2 * time.Minute}
+	res, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer res.Body.Close()
 
-	var schemaResponse introspectionResult
+	var schemaResponse introspectionResults
 	err = json.NewDecoder(res.Body).Decode(&schemaResponse)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if len(schemaResponse.Errors) != 0 {
-		log.Fatal(schemaResponse.Errors)
-    return
+		var errs []string
+		for _, err := range schemaResponse.Errors {
+			errs = append(errs, err.Message)
+		}
+		return "", errors.New("encountered the following GraphQL errors: " + strings.Join(errs, ","))
 	}
 
-	fmt.Println(printSchema(schemaResponse.Data.Schema))
-}
-
-type headers map[string][]string
-
-func (h headers) Set(input string) error {
-	values := strings.Split(input, "=")
-	if len(values) < 2 {
-		return errors.New(`header must appear like 'Authorization="Bearer token"'`)
-	}
-	h[values[0]] = append(h[values[0]], values[1:]...)
-	return nil
-}
-
-func (h *headers) String() string {
-	sb := strings.Builder{}
-	for header, values := range *h {
-		sb.WriteString(fmt.Sprintf("%s=%s", header, strings.Join(values, ",")))
-	}
-	return sb.String()
-}
-
-type graphQLRequest struct {
-	Query     string                 `json:"query"`
-	Variables map[string]interface{} `json:"variables"`
-}
-
-type graphqlErrs []graphqlErr
-
-type graphqlErr struct {
-	Message string `json:"message"`
+	return printSchema(schemaResponse.Data.Schema), nil
 }

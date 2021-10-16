@@ -1,4 +1,4 @@
-package main
+package gqlfetch
 
 import (
 	"encoding/json"
@@ -7,9 +7,11 @@ import (
 	"github.com/vektah/gqlparser/ast"
 )
 
-type introspectionResult struct {
-	Errors graphqlErrs `json:"errors"`
-	Data   struct {
+type introspectionResults struct {
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+	Data struct {
 		Schema introspectionSchema `json:"__schema"`
 	} `json:"data"`
 }

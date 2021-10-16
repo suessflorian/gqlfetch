@@ -1,4 +1,4 @@
-package main
+package gqlfetch
 
 import (
 	"encoding/json"

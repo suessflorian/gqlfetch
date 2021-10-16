@@ -62,7 +62,16 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition) {
 			sb.WriteString("{\n")
 			for _, field := range typ.Fields {
 				printDescription(sb, field.Description)
-				sb.WriteString(fmt.Sprintf("\t%s: %s\n", field.Name, introspectionTypeToAstType(field.Type).String()))
+				sb.WriteString(fmt.Sprintf("\t%s", field.Name))
+				if len(field.Args) > 0 {
+					sb.WriteString("(\n")
+					for _, arg := range field.Args {
+						printDescription(sb, arg.Description)
+						sb.WriteString(fmt.Sprintf("\t\t%s: %s\n", arg.Name, introspectionTypeToAstType(arg.Type).String()))
+					}
+					sb.WriteString("\t)")
+				}
+				sb.WriteString(fmt.Sprintf(": %s\n", introspectionTypeToAstType(field.Type).String()))
 			}
 			sb.WriteString("}")
 

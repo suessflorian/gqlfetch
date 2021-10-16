@@ -26,12 +26,12 @@ type introspectionTypeDefinition struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	Fields      []struct {
-		Name              string            `json:"name"`
-		Description       string            `json:"description"`
-		Args              []interface{}     `json:"args"`
-		Type              *introspectedType `json:"type"`
-		IsDeprecated      bool              `json:"isDeprecated"`
-		DeprecationReason interface{}       `json:"deprecationReason"`
+		Name              string                    `json:"name"`
+		Description       string                    `json:"description"`
+		Args              []introspectionInputField `json:"args"`
+		Type              *introspectedType         `json:"type"`
+		IsDeprecated      bool                      `json:"isDeprecated"`
+		DeprecationReason interface{}               `json:"deprecationReason"`
 	} `json:"fields"`
 	InputFields   []introspectionInputField `json:"inputFields"`
 	Interfaces    []ast.Definition          `json:"interfaces"`
@@ -52,10 +52,10 @@ type introspectionDirectiveDefinition struct {
 }
 
 type introspectionInputField struct {
-	Name         string           `json:"name"`
-	Description  string           `json:"description"`
-	Type         introspectedType `json:"type"`
-	DefaultValue interface{}      `json:"defaultValue"`
+	Name         string            `json:"name"`
+	Description  string            `json:"description"`
+	Type         *introspectedType `json:"type"`
+	DefaultValue interface{}       `json:"defaultValue"`
 }
 
 type introspectedType struct {
@@ -88,6 +88,6 @@ func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
 		return &res
 	default:
 		log.Fatalf("type kind unknown: %s", typ.Kind)
-    return nil
+		return nil
 	}
 }

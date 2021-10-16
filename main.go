@@ -69,4 +69,3 @@ type graphqlErrs []graphqlErr
 type graphqlErr struct {
 	Message string `json:"message"`
 }
-

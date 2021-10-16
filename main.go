@@ -63,6 +63,8 @@ func printSchema(schema GraphQLSchema) string {
 	sb := &strings.Builder{}
 
 	printDirectives(sb, schema.Directives)
+	sb.WriteString("\n")
+	printTypes(sb, schema.Types)
 
 	return sb.String()
 }
@@ -80,8 +82,7 @@ func printDirectives(sb *strings.Builder, directives []Directives) {
 					sb.WriteString(fmt.Sprintf(`"""%s"""`, arg.Description))
 					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("%s: ", arg.Name))
-				sb.WriteString(printType(arg.Type))
+				sb.WriteString(fmt.Sprintf("%s: %s\n", arg.Name, printType(arg.Type)))
 			}
 			sb.WriteString("\n)")
 		}
@@ -93,6 +94,88 @@ func printDirectives(sb *strings.Builder, directives []Directives) {
 				sb.WriteString(" | ")
 			}
 		}
+	}
+}
+
+const (
+	OBJECT       = "OBJECT"
+	UNION        = "UNION"
+	ENUM         = "ENUM"
+	SCALAR       = "SCALAR"
+	INPUT_OBJECT = "INPUT_OBJECT"
+	INTERFACE    = "INTERFACE"
+)
+
+func printTypes(sb *strings.Builder, types []Types) {
+	for _, typ := range types {
+		if typ.Description != "" {
+			sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
+			sb.WriteString("\n")
+		}
+		switch typ.Kind {
+		case OBJECT:
+			sb.WriteString(fmt.Sprintf("type %s {\n", typ.Name))
+			for _, field := range typ.Fields {
+				if typ.Description != "" {
+					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+			}
+			sb.WriteString("}")
+		case UNION:
+			sb.WriteString(fmt.Sprintf("union %s =", typ.Name))
+			var possible []Type
+			if err := json.Unmarshal(typ.PossibleTypes, &possible); err != nil {
+				panic(err)
+			}
+			for i, typ := range possible {
+				sb.WriteString(printType(typ))
+				if i < len(possible)-1 {
+					sb.WriteString(" | ")
+				}
+			}
+		case ENUM:
+			sb.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
+			var enumValues []EnumValue
+			if err := json.Unmarshal(typ.EnumValues, &enumValues); err != nil {
+				panic(err)
+			}
+			for _, value := range enumValues {
+				if typ.Description != "" {
+					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%s\n", value.Name))
+			}
+			sb.WriteString("}")
+		case SCALAR:
+			sb.WriteString(fmt.Sprintf("scalar %s", typ.Name))
+		case INPUT_OBJECT:
+			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
+			for _, field := range typ.Fields {
+				if typ.Description != "" {
+					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+			}
+			sb.WriteString("}")
+		case INTERFACE:
+			sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
+			for _, field := range typ.Fields {
+				if typ.Description != "" {
+					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+			}
+			sb.WriteString("}")
+
+		default:
+			log.Println("not handling", typ.Kind)
+		}
+		sb.WriteString("\n")
 	}
 }
 
@@ -161,6 +244,11 @@ type GraphQLSchema struct {
 	Directives       []Directives `json:"directives"`
 }
 
+type EnumValue struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 type Types struct {
 	Kind        string `json:"kind"`
 	Name        string `json:"name"`
@@ -173,10 +261,15 @@ type Types struct {
 		IsDeprecated      bool          `json:"isDeprecated"`
 		DeprecationReason interface{}   `json:"deprecationReason"`
 	} `json:"fields"`
-	InputFields   []InputField  `json:"inputFields"`
-	Interfaces    []interface{} `json:"interfaces"`
-	EnumValues    []interface{} `json:"enumValues"`
-	PossibleTypes interface{}   `json:"possibleTypes"`
+	InputFields   []InputField    `json:"inputFields"`
+	Interfaces    json.RawMessage `json:"interfaces"`
+	EnumValues    json.RawMessage `json:"enumValues"`
+	PossibleTypes json.RawMessage `json:"possibleTypes"`
+}
+
+type Interface struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 type InputField struct {

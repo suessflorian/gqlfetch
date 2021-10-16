@@ -25,7 +25,7 @@ func main() {
 	flag.Var(&headers, "header", "Headers to be passed endpoint (can appear multiple times)")
 	flag.Parse()
 
-	fmt.Println(gqlfetch.BuildClientSchema(ctx, gqlfetch.ServerConfig{Endpoint: endpoint, Headers: http.Header(headers)}))
+	fmt.Println(gqlfetch.BuildClientSchemaWithHeaders(ctx, endpoint, http.Header(headers)))
 }
 
 type headers map[string][]string

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/vektah/gqlparser/ast"
 	"log"
 	"net/http"
 	"os"
@@ -69,7 +70,7 @@ func printSchema(schema GraphQLSchema) string {
 	return sb.String()
 }
 
-func printDirectives(sb *strings.Builder, directives []Directives) {
+func printDirectives(sb *strings.Builder, directives []Directive) {
 	for _, directive := range directives {
 		if directive.Description != "" {
 			sb.WriteString(fmt.Sprintf(`"""%s"""`, directive.Description))
@@ -82,29 +83,20 @@ func printDirectives(sb *strings.Builder, directives []Directives) {
 					sb.WriteString(fmt.Sprintf(`"""%s"""`, arg.Description))
 					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("%s: %s\n", arg.Name, printType(arg.Type)))
+				sb.WriteString(fmt.Sprintf("%s: %s\n", arg.Name, arg.Type.String()))
 			}
 			sb.WriteString("\n)")
 		}
 
 		sb.WriteString(" on ")
 		for i, location := range directive.Locations {
-			sb.WriteString(location)
+			sb.WriteString(string(location))
 			if i < len(directive.Locations)-1 {
 				sb.WriteString(" | ")
 			}
 		}
 	}
 }
-
-const (
-	OBJECT       = "OBJECT"
-	UNION        = "UNION"
-	ENUM         = "ENUM"
-	SCALAR       = "SCALAR"
-	INPUT_OBJECT = "INPUT_OBJECT"
-	INTERFACE    = "INTERFACE"
-)
 
 func printTypes(sb *strings.Builder, types []Types) {
 	for _, typ := range types {
@@ -113,31 +105,41 @@ func printTypes(sb *strings.Builder, types []Types) {
 			sb.WriteString("\n")
 		}
 		switch typ.Kind {
-		case OBJECT:
-			sb.WriteString(fmt.Sprintf("type %s {\n", typ.Name))
+		case ast.Object:
+			sb.WriteString(fmt.Sprintf("type %s ", typ.Name))
+			if len(typ.Interfaces) > 0 {
+				sb.WriteString("implements ")
+				for i, intface := range typ.Interfaces {
+					sb.WriteString(intface.Name)
+					if i < len(typ.Interfaces)-1 {
+						sb.WriteString(" & ")
+					}
+				}
+			}
+			sb.WriteString("{\n")
 			for _, field := range typ.Fields {
 				if typ.Description != "" {
 					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
 					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
-		case UNION:
+		case ast.Union:
 			sb.WriteString(fmt.Sprintf("union %s =", typ.Name))
-			var possible []Type
+			var possible []*Type
 			if err := json.Unmarshal(typ.PossibleTypes, &possible); err != nil {
 				panic(err)
 			}
 			for i, typ := range possible {
-				sb.WriteString(printType(typ))
+				sb.WriteString(typ.String())
 				if i < len(possible)-1 {
 					sb.WriteString(" | ")
 				}
 			}
-		case ENUM:
+		case ast.Enum:
 			sb.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
-			var enumValues []EnumValue
+			var enumValues ast.EnumValueList
 			if err := json.Unmarshal(typ.EnumValues, &enumValues); err != nil {
 				panic(err)
 			}
@@ -149,58 +151,33 @@ func printTypes(sb *strings.Builder, types []Types) {
 				sb.WriteString(fmt.Sprintf("%s\n", value.Name))
 			}
 			sb.WriteString("}")
-		case SCALAR:
+		case ast.Scalar:
 			sb.WriteString(fmt.Sprintf("scalar %s", typ.Name))
-		case INPUT_OBJECT:
+		case ast.InputObject:
 			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
 			for _, field := range typ.Fields {
 				if typ.Description != "" {
 					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
 					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
-		case INTERFACE:
+		case ast.Interface:
 			sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
 			for _, field := range typ.Fields {
 				if typ.Description != "" {
 					sb.WriteString(fmt.Sprintf(`"""%s"""`, typ.Description))
 					sb.WriteString("\n")
 				}
-				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, printType(field.Type)))
+				sb.WriteString(fmt.Sprintf("%s: %s\n", field.Name, field.Type.String()))
 			}
 			sb.WriteString("}")
 
 		default:
-			log.Println("not handling", typ.Kind)
+			panic(fmt.Sprint("not handling", typ.Kind))
 		}
 		sb.WriteString("\n")
-	}
-}
-
-const (
-	NON_NULL = "NON_NULL"
-	LIST     = "LIST"
-)
-
-func printType(typ Type) string {
-	var ofType Type
-	if err := json.Unmarshal(typ.OfType, &ofType); err != nil {
-		panic(err)
-	}
-
-	if ofType.isNil {
-		return *typ.Name
-	}
-
-	switch typ.Kind {
-	case NON_NULL:
-		return fmt.Sprintf("%s!", printType(ofType))
-	case LIST:
-		return fmt.Sprintf("[%s]", printType(ofType))
-	default:
-		panic(fmt.Sprintf("do not recognize type kind: %q", typ.Kind))
 	}
 }
 
@@ -220,56 +197,31 @@ type introspectionRes struct {
 	Data   struct {
 		Schema GraphQLSchema `json:"__schema"`
 	} `json:"data"`
-	Extensions struct {
-		Plan struct {
-			RootSteps interface{} `json:"RootSteps"`
-		} `json:"plan"`
-		Timing struct {
-			Execution string `json:"execution"`
-			Format    string `json:"format"`
-			Merge     string `json:"merge"`
-		} `json:"timing"`
-	} `json:"extensions"`
 }
 
 type GraphQLSchema struct {
-	QueryType struct {
-		Name string `json:"name"`
-	} `json:"queryType"`
-	MutationType struct {
-		Name string `json:"name"`
-	} `json:"mutationType"`
-	SubscriptionType interface{}  `json:"subscriptionType"`
-	Types            []Types      `json:"types"`
-	Directives       []Directives `json:"directives"`
-}
-
-type EnumValue struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	QueryType    ast.Definition `json:"queryType"`
+	MutationType ast.Definition `json:"mutationType"`
+	Types        []Types        `json:"types"`
+	Directives   []Directive    `json:"directives"`
 }
 
 type Types struct {
-	Kind        string `json:"kind"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Kind        ast.DefinitionKind `json:"kind"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
 	Fields      []struct {
 		Name              string        `json:"name"`
 		Description       string        `json:"description"`
 		Args              []interface{} `json:"args"`
-		Type              Type          `json:"type"`
+		Type              *Type         `json:"type"`
 		IsDeprecated      bool          `json:"isDeprecated"`
 		DeprecationReason interface{}   `json:"deprecationReason"`
 	} `json:"fields"`
-	InputFields   []InputField    `json:"inputFields"`
-	Interfaces    json.RawMessage `json:"interfaces"`
-	EnumValues    json.RawMessage `json:"enumValues"`
-	PossibleTypes json.RawMessage `json:"possibleTypes"`
-}
-
-type Interface struct {
-	Kind string `json:"kind"`
-	Name string `json:"name"`
+	InputFields   []InputField     `json:"inputFields"`
+	Interfaces    []ast.Definition `json:"interfaces"`
+	EnumValues    json.RawMessage  `json:"enumValues"`
+	PossibleTypes json.RawMessage  `json:"possibleTypes"`
 }
 
 type InputField struct {
@@ -279,42 +231,67 @@ type InputField struct {
 	DefaultValue interface{} `json:"defaultValue"`
 }
 
-type Directives struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Locations   []string `json:"locations"`
+type Directive struct {
+	Name        string                  `json:"name"`
+	Description string                  `json:"description"`
+	Locations   []ast.DirectiveLocation `json:"locations"`
 	Args        []struct {
-		Name         string `json:"name"`
-		Description  string `json:"description"`
-		Type         `json:"type"`
+		Name         string      `json:"name"`
+		Description  string      `json:"description"`
+		Type         *Type       `json:"type"`
 		DefaultValue interface{} `json:"defaultValue"`
 	} `json:"args"`
 }
 
-type Type struct {
-	typ
-	isNil bool
+// biggest challenge will be transforming introspection result to this `ast.Type`
+
+type introspectedType struct {
+	Kind   TypeKind          `json:"kind"`
+	Name   *string           `json:"name"`
+	OfType *introspectedType `json:"ofType"`
 }
 
-type typ struct {
-	Kind   string          `json:"kind"`
-	Name   *string         `json:"name"`
-	OfType json.RawMessage `json:"ofType"`
+type TypeKind string
+
+const (
+	NON_NULL TypeKind = "NON_NULL"
+	LIST     TypeKind = "LIST"
+)
+
+type Type struct {
+	ast.Type
 }
 
 func (t *Type) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		t.isNil = true
-	}
-
-	var typ typ
+	var typ introspectedType
 	if err := json.Unmarshal(data, &typ); err != nil {
 		return err
 	}
 
-	t.Kind = typ.Kind
-	t.Name = typ.Name
-	t.OfType = typ.OfType
+	head := introspectionTypeToAstType(&typ)
+	t.NamedType = head.NamedType
+	t.Elem = head.Elem
+	t.NonNull = head.NonNull
+
+	return nil
+}
+
+func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
+	var res ast.Type
+	if typ.OfType == nil {
+		res.NamedType = *typ.Name
+		return &res
+	}
+
+	switch typ.Kind {
+	case NON_NULL:
+		res.NonNull = true
+		res.Elem = introspectionTypeToAstType(typ.OfType)
+		return &res
+	case LIST:
+		res.Elem = introspectionTypeToAstType(typ.OfType)
+		return &res
+	}
 
 	return nil
 }

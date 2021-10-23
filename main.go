@@ -157,7 +157,7 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition) {
 
 		case ast.InputObject:
 			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
-			for _, field := range typ.Fields {
+			for _, field := range typ.InputFields {
 				printDescription(sb, typ.Description)
 				sb.WriteString(fmt.Sprintf("\t%s: %s\n", field.Name, introspectionTypeToAstType(field.Type).String()))
 			}

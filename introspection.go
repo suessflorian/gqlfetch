@@ -82,8 +82,8 @@ func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
 
 	switch typ.Kind {
 	case NON_NULL:
+		res = *introspectionTypeToAstType(typ.OfType)
 		res.NonNull = true
-		res.Elem = introspectionTypeToAstType(typ.OfType)
 		return &res
 	case LIST:
 		res.Elem = introspectionTypeToAstType(typ.OfType)

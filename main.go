@@ -96,6 +96,9 @@ func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDef
 
 func printTypes(sb *strings.Builder, types []introspectionTypeDefinition) {
 	for _, typ := range types {
+		if strings.HasPrefix(typ.Name, "__") {
+			continue
+		}
 		printDescription(sb, typ.Description)
 
 		switch typ.Kind {

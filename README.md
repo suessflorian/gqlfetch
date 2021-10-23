@@ -28,3 +28,7 @@ If you get an error claiming that `gqlfetch` cannot be found or is not defined, 
 ## Roadmap
 
 Hoping to incorporate this into a graphql utility package like [gqlparser](https://github.com/vektah/gqlparser), enable introspection based type-safe graphql client generation in [genqlient](https://github.com/Khan/genqlient) and simplify the `Service` type federated services need to expose to a [bramble](https://movio.github.io/bramble/#/federation) gateway (improving the schema gathering logic).
+
+## Notice
+
+Project not fully mature yet, if you find any issues, please submit an issue.

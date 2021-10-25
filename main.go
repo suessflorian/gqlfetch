@@ -71,6 +71,9 @@ func printSchema(schema introspectionSchema) string {
 
 func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDefinition) {
 	for _, directive := range directives {
+		if containsStr(directive.Name, excludeDirectives) {
+			continue
+		}
 		printDescription(sb, directive.Description)
 		sb.WriteString(fmt.Sprintf("directive @%s", directive.Name))
 		if len(directive.Args) > 0 {
@@ -97,6 +100,9 @@ func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDef
 func printTypes(sb *strings.Builder, types []introspectionTypeDefinition) {
 	for _, typ := range types {
 		if strings.HasPrefix(typ.Name, "__") {
+			continue
+		}
+		if containsStr(typ.Name, excludeScalarTypes) && typ.Kind == ast.Scalar {
 			continue
 		}
 		printDescription(sb, typ.Description)

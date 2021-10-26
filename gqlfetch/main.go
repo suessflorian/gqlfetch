@@ -19,13 +19,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	var endpoint string
+	var withoutBuiltins bool
 	headers := make(headers)
 
 	flag.StringVar(&endpoint, "endpoint", DEFAULT_ENDPOINT, "GraphQL server endpoint")
 	flag.Var(&headers, "header", "Headers to be passed endpoint (can appear multiple times)")
+	flag.BoolVar(&withoutBuiltins, "without-builtins", false, "Do not include builtin types")
 	flag.Parse()
 
-	schema, err := gqlfetch.BuildClientSchemaWithHeaders(ctx, endpoint, http.Header(headers))
+	schema, err := gqlfetch.BuildClientSchemaWithHeaders(ctx, endpoint, http.Header(headers), withoutBuiltins)
 	if err != nil {
 		panic(err)
 	}

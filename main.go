@@ -18,11 +18,11 @@ import (
 //go:embed introspect.graphql
 var introspectSchema string
 
-func BuildClientSchema(ctx context.Context, endpoint string) (string, error) {
-	return BuildClientSchemaWithHeaders(ctx, endpoint, make(http.Header))
+func BuildClientSchema(ctx context.Context, endpoint string, withoutBuiltins bool) (string, error) {
+	return BuildClientSchemaWithHeaders(ctx, endpoint, make(http.Header), withoutBuiltins)
 }
 
-func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers http.Header) (string, error) {
+func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers http.Header, withoutBuiltins bool) (string, error) {
 	buffer := new(bytes.Buffer)
 	if err := json.NewEncoder(buffer).Encode(struct{ Query string }{Query: introspectSchema}); err != nil {
 		return "", fmt.Errorf("failed to prepare introspection query request: %w", err)
@@ -57,20 +57,23 @@ func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers 
 		return "", errors.New("encountered the following GraphQL errors: " + strings.Join(errs, ","))
 	}
 
-	return printSchema(schemaResponse.Data.Schema), nil
+	return printSchema(schemaResponse.Data.Schema, withoutBuiltins), nil
 }
 
-func printSchema(schema introspectionSchema) string {
+func printSchema(schema introspectionSchema, withoutBuiltins bool) string {
 	sb := &strings.Builder{}
 
-	printDirectives(sb, schema.Directives)
-	printTypes(sb, schema.Types)
+	printDirectives(sb, schema.Directives, withoutBuiltins)
+	printTypes(sb, schema.Types, withoutBuiltins)
 
 	return sb.String()
 }
 
-func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDefinition) {
+func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDefinition, withoutBuiltins bool) {
 	for _, directive := range directives {
+		if withoutBuiltins && containsStr(directive.Name, excludeDirectives) {
+			continue
+		}
 		printDescription(sb, directive.Description)
 		sb.WriteString(fmt.Sprintf("directive @%s", directive.Name))
 		if len(directive.Args) > 0 {
@@ -94,9 +97,12 @@ func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDef
 	}
 }
 
-func printTypes(sb *strings.Builder, types []introspectionTypeDefinition) {
+func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withoutBuiltins bool) {
 	for _, typ := range types {
 		if strings.HasPrefix(typ.Name, "__") {
+			continue
+		}
+		if withoutBuiltins && containsStr(typ.Name, excludeScalarTypes) && typ.Kind == ast.Scalar {
 			continue
 		}
 		printDescription(sb, typ.Description)

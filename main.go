@@ -24,7 +24,9 @@ func BuildClientSchema(ctx context.Context, endpoint string, withoutBuiltins boo
 
 func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers http.Header, withoutBuiltins bool) (string, error) {
 	buffer := new(bytes.Buffer)
-	if err := json.NewEncoder(buffer).Encode(struct{ Query string }{Query: introspectSchema}); err != nil {
+	if err := json.NewEncoder(buffer).Encode(struct {
+		Query string `json:"query"`
+	}{Query: introspectSchema}); err != nil {
 		return "", fmt.Errorf("failed to prepare introspection query request: %w", err)
 	}
 

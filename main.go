@@ -175,13 +175,7 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 			sb.WriteString("}")
 
 		case ast.Interface:
-			sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
-			for _, field := range typ.Fields {
-				printDescription(sb, typ.Description)
-				sb.WriteString(fmt.Sprintf("\t%s: %s\n", field.Name, introspectionTypeToAstType(field.Type).String()))
-			}
-			sb.WriteString("}")
-
+			printInterface(sb, typ)
 		default:
 			panic(fmt.Sprint("not handling", typ.Kind))
 		}
@@ -195,4 +189,25 @@ func printDescription(sb *strings.Builder, description string) {
 		sb.WriteString(fmt.Sprintf(`"""%s"""`, description))
 		sb.WriteString("\n")
 	}
+}
+
+func printInterface(sb *strings.Builder, typ introspectionTypeDefinition) {
+	if typ.Kind != ast.Interface {
+		log.Fatalf("cannot print %v as %v", typ.Kind, ast.Interface)
+	}
+
+	sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
+	for _, field := range typ.Fields {
+		printDescription(sb, typ.Description)
+		sb.WriteString(fmt.Sprintf("\t%s", field.Name))
+		if len(field.Args) > 0 {
+			sb.WriteString("(\n")
+			for _, arg := range field.Args {
+				sb.WriteString(fmt.Sprintf("\t\t%s: %s\n", arg.Name, introspectionTypeToAstType(arg.Type).String()))
+			}
+			sb.WriteString("\t)")
+		}
+		sb.WriteString(fmt.Sprintf(": %s\n", introspectionTypeToAstType(field.Type).String()))
+	}
+	sb.WriteString("}")
 }

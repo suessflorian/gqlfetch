@@ -24,21 +24,23 @@ type introspectionSchema struct {
 }
 
 type introspectionTypeDefinition struct {
-	Kind        ast.DefinitionKind `json:"kind"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Fields      []struct {
-		Name              string                    `json:"name"`
-		Description       string                    `json:"description"`
-		Args              []introspectionInputField `json:"args"`
-		Type              *introspectedType         `json:"type"`
-		IsDeprecated      bool                      `json:"isDeprecated"`
-		DeprecationReason interface{}               `json:"deprecationReason"`
-	} `json:"fields"`
+	Kind          ast.DefinitionKind        `json:"kind"`
+	Name          string                    `json:"name"`
+	Description   string                    `json:"description"`
+	Fields        []introspectedTypeField   `json:"fields"`
 	InputFields   []introspectionInputField `json:"inputFields"`
 	Interfaces    []ast.Definition          `json:"interfaces"`
 	EnumValues    json.RawMessage           `json:"enumValues"`
 	PossibleTypes json.RawMessage           `json:"possibleTypes"`
+}
+
+type introspectedTypeField struct {
+	Name              string                    `json:"name"`
+	Description       string                    `json:"description"`
+	Args              []introspectionInputField `json:"args"`
+	Type              *introspectedType         `json:"type"`
+	IsDeprecated      bool                      `json:"isDeprecated"`
+	DeprecationReason interface{}               `json:"deprecationReason"`
 }
 
 type introspectionDirectiveDefinition struct {
@@ -71,6 +73,7 @@ type introspectionTypeKind string
 const (
 	NON_NULL introspectionTypeKind = "NON_NULL"
 	LIST     introspectionTypeKind = "LIST"
+	OBJECT   introspectionTypeKind = "OBJECT"
 )
 
 func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
@@ -94,8 +97,10 @@ func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
 	}
 }
 
-var excludeScalarTypes = []string{"ID", "Int", "String", "Float", "Boolean"}
-var excludeDirectives = []string{"deprecated", "include", "skip"}
+var (
+	excludeScalarTypes = []string{"ID", "Int", "String", "Float", "Boolean"}
+	excludeDirectives  = []string{"deprecated", "include", "skip"}
+)
 
 func containsStr(needle string, hay []string) bool {
 	for _, s := range hay {

@@ -99,7 +99,7 @@ func introspectionTypeToAstType(typ *introspectedType) *ast.Type {
 
 var (
 	excludeScalarTypes = []string{"ID", "Int", "String", "Float", "Boolean"}
-	excludeDirectives  = []string{"deprecated", "include", "skip"}
+	excludeDirectives  = []string{"deprecated", "include", "skip", "specifiedBy"}
 )
 
 func containsStr(needle string, hay []string) bool {

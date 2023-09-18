@@ -19,10 +19,14 @@ import (
 var introspectSchema string
 
 func BuildClientSchema(ctx context.Context, endpoint string, withoutBuiltins bool) (string, error) {
-	return BuildClientSchemaWithHeaders(ctx, endpoint, make(http.Header), withoutBuiltins)
+	return BuildClientSchemaWithMethodAndHeaders(ctx, endpoint, http.MethodPost, make(http.Header), withoutBuiltins)
 }
 
 func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers http.Header, withoutBuiltins bool) (string, error) {
+	return BuildClientSchemaWithMethodAndHeaders(ctx, endpoint, http.MethodPost, headers, withoutBuiltins)
+}
+
+func BuildClientSchemaWithMethodAndHeaders(ctx context.Context, endpoint string, method string, headers http.Header, withoutBuiltins bool) (string, error) {
 	buffer := new(bytes.Buffer)
 	if err := json.NewEncoder(buffer).Encode(struct {
 		Query string `json:"query"`
@@ -30,7 +34,7 @@ func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers 
 		return "", fmt.Errorf("failed to prepare introspection query request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, buffer)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, buffer)
 	if err != nil {
 		return "", fmt.Errorf("failed to create query request: %w", err)
 	}

@@ -56,6 +56,10 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 		return "", fmt.Errorf("failed to create query request: %w", err)
 	}
 
+	// If no headers are provided, create an empty header map, so we can add the content type header
+	if options.Headers == nil {
+		options.Headers = make(http.Header)
+	}
 	req.Header = http.Header(options.Headers)
 	req.Header.Add("Content-Type", "application/json")
 

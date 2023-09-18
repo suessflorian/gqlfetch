@@ -18,11 +18,32 @@ import (
 //go:embed introspect.graphql
 var introspectSchema string
 
+type BuildClientSchemaOptions struct {
+	Endpoint        string
+	Method          string
+	Headers         http.Header
+	WithoutBuiltins bool
+}
+
 func BuildClientSchema(ctx context.Context, endpoint string, withoutBuiltins bool) (string, error) {
-	return BuildClientSchemaWithHeaders(ctx, endpoint, make(http.Header), withoutBuiltins)
+	return BuildClientSchemaWithOptions(ctx, BuildClientSchemaOptions{
+		Endpoint:        endpoint,
+		Method:          http.MethodPost,
+		Headers:         make(http.Header),
+		WithoutBuiltins: withoutBuiltins,
+	})
 }
 
 func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers http.Header, withoutBuiltins bool) (string, error) {
+	return BuildClientSchemaWithOptions(ctx, BuildClientSchemaOptions{
+		Endpoint:        endpoint,
+		Method:          http.MethodPost,
+		Headers:         headers,
+		WithoutBuiltins: withoutBuiltins,
+	})
+}
+
+func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchemaOptions) (string, error) {
 	buffer := new(bytes.Buffer)
 	if err := json.NewEncoder(buffer).Encode(struct {
 		Query string `json:"query"`
@@ -30,12 +51,16 @@ func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers 
 		return "", fmt.Errorf("failed to prepare introspection query request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, buffer)
+	req, err := http.NewRequestWithContext(ctx, options.Method, options.Endpoint, buffer)
 	if err != nil {
 		return "", fmt.Errorf("failed to create query request: %w", err)
 	}
 
-	req.Header = http.Header(headers)
+	// If no headers are provided, create an empty header map, so we can add the content type header
+	if options.Headers == nil {
+		options.Headers = make(http.Header)
+	}
+	req.Header = http.Header(options.Headers)
 	req.Header.Add("Content-Type", "application/json")
 
 	client := http.Client{Timeout: 2 * time.Minute}
@@ -59,7 +84,7 @@ func BuildClientSchemaWithHeaders(ctx context.Context, endpoint string, headers 
 		return "", errors.New("encountered the following GraphQL errors: " + strings.Join(errs, ","))
 	}
 
-	return printSchema(schemaResponse.Data.Schema, withoutBuiltins), nil
+	return printSchema(schemaResponse.Data.Schema, options.WithoutBuiltins), nil
 }
 
 func printSchema(schema introspectionSchema, withoutBuiltins bool) string {

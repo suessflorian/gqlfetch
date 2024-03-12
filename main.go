@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -66,14 +65,17 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 	client := http.Client{Timeout: 2 * time.Minute}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("unable to download schema: %w", err)
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unable to download schema: %s", res.Status)
+	}
 
 	var schemaResponse introspectionResults
 	err = json.NewDecoder(res.Body).Decode(&schemaResponse)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("unable to decode schema: %w", err)
 	}
 
 	if len(schemaResponse.Errors) != 0 {
@@ -90,23 +92,35 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 func printSchema(schema introspectionSchema, withoutBuiltins bool) string {
 	sb := &strings.Builder{}
 
-	printDirectives(sb, schema.Directives, withoutBuiltins)
-	printTypes(sb, schema.Types, withoutBuiltins)
+	err := printDirectives(sb, schema.Directives, withoutBuiltins)
+	if err != nil {
+		return fmt.Sprintf("unable to write directives: %v", err)
+	}
+	err = printTypes(sb, schema.Types, withoutBuiltins)
+	if err != nil {
+		return fmt.Sprintf("unable to write types: %v", err)
+	}
 
 	return sb.String()
 }
 
-func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDefinition, withoutBuiltins bool) {
+func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDefinition, withoutBuiltins bool) error {
 	for _, directive := range directives {
 		if withoutBuiltins && containsStr(directive.Name, excludeDirectives) {
 			continue
 		}
-		printDescription(sb, directive.Description)
+		err := printDescription(sb, directive.Description)
+		if err != nil {
+			return fmt.Errorf("unable to write directive description for %s: %w", directive.Name, err)
+		}
 		sb.WriteString(fmt.Sprintf("directive @%s", directive.Name))
 		if len(directive.Args) > 0 {
 			sb.WriteString("(\n")
 			for _, arg := range directive.Args {
-				printDescription(sb, arg.Description)
+				err = printDescription(sb, arg.Description)
+				if err != nil {
+					return fmt.Errorf("unable to write description for arg %s.%s: %w", directive.Name, arg.Name, err)
+				}
 				sb.WriteString(fmt.Sprintf("\t%s: %s\n", arg.Name, introspectionTypeToAstType(arg.Type).String()))
 			}
 			sb.WriteString(")")
@@ -122,9 +136,10 @@ func printDirectives(sb *strings.Builder, directives []introspectionDirectiveDef
 		sb.WriteString("\n")
 		sb.WriteString("\n")
 	}
+	return nil
 }
 
-func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withoutBuiltins bool) {
+func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withoutBuiltins bool) error {
 	for _, typ := range types {
 		if strings.HasPrefix(typ.Name, "__") {
 			continue
@@ -132,7 +147,10 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 		if withoutBuiltins && containsStr(typ.Name, excludeScalarTypes) && typ.Kind == ast.Scalar {
 			continue
 		}
-		printDescription(sb, typ.Description)
+		err := printDescription(sb, typ.Description)
+		if err != nil {
+			return fmt.Errorf("unable to write description for type %s: %w", typ.Name, err)
+		}
 
 		switch typ.Kind {
 
@@ -149,12 +167,18 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 			}
 			sb.WriteString("{\n")
 			for _, field := range typ.Fields {
-				printDescription(sb, field.Description)
+				err = printDescription(sb, field.Description)
+				if err != nil {
+					return fmt.Errorf("unable to write description for field %s.%s: %w", typ.Name, field.Name, err)
+				}
 				sb.WriteString(fmt.Sprintf("\t%s", field.Name))
 				if len(field.Args) > 0 {
 					sb.WriteString("(\n")
 					for _, arg := range field.Args {
-						printDescription(sb, arg.Description)
+						err = printDescription(sb, arg.Description)
+						if err != nil {
+							return fmt.Errorf("unable to write description for arg %s.%s.%s: %w", typ.Name, field.Name, arg.Name, err)
+						}
 						sb.WriteString(fmt.Sprintf("\t\t%s: %s\n", arg.Name, introspectionTypeToAstType(arg.Type).String()))
 					}
 					sb.WriteString("\t)")
@@ -167,7 +191,7 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 			sb.WriteString(fmt.Sprintf("union %s =", typ.Name))
 			var possible []*introspectedType
 			if err := json.Unmarshal(typ.PossibleTypes, &possible); err != nil {
-				panic(err)
+				return fmt.Errorf("unable to unmarshal possible types for %s: %w", typ.Name, err)
 			}
 			for i, typ := range possible {
 				sb.WriteString(introspectionTypeToAstType(typ).String())
@@ -180,10 +204,13 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 			sb.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
 			var enumValues ast.EnumValueList
 			if err := json.Unmarshal(typ.EnumValues, &enumValues); err != nil {
-				panic(err)
+				return fmt.Errorf("unable to unmarshal enum values for %s: %w", typ.Name, err)
 			}
 			for _, value := range enumValues {
-				printDescription(sb, value.Description)
+				err = printDescription(sb, value.Description)
+				if err != nil {
+					return fmt.Errorf("unable to write description for enum value %s.%s: %w", typ.Name, value.Name, err)
+				}
 				sb.WriteString(fmt.Sprintf("\t%s\n", value.Name))
 			}
 			sb.WriteString("}")
@@ -194,36 +221,47 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 		case ast.InputObject:
 			sb.WriteString(fmt.Sprintf("input %s {\n", typ.Name))
 			for _, field := range typ.InputFields {
-				printDescription(sb, typ.Description)
+				err = printDescription(sb, typ.Description)
+				if err != nil {
+					return fmt.Errorf("unable to write description for input field %s.%s: %w", typ.Name, field.Name, err)
+				}
 				sb.WriteString(fmt.Sprintf("\t%s: %s\n", field.Name, introspectionTypeToAstType(field.Type).String()))
 			}
 			sb.WriteString("}")
 
 		case ast.Interface:
-			printInterface(sb, typ)
+			err = printInterface(sb, typ)
+			if err != nil {
+				return fmt.Errorf("unable to write interface %s: %w", typ.Name, err)
+			}
 		default:
-			panic(fmt.Sprint("not handling", typ.Kind))
+			return fmt.Errorf("unsupported type for %s: %s", typ.Name, typ.Kind)
 		}
 		sb.WriteString("\n")
 		sb.WriteString("\n")
 	}
+	return nil
 }
 
-func printDescription(sb *strings.Builder, description string) {
+func printDescription(sb *strings.Builder, description string) error {
 	if description != "" {
 		sb.WriteString(fmt.Sprintf(`"""%s"""`, description))
 		sb.WriteString("\n")
 	}
+	return nil
 }
 
-func printInterface(sb *strings.Builder, typ introspectionTypeDefinition) {
+func printInterface(sb *strings.Builder, typ introspectionTypeDefinition) error {
 	if typ.Kind != ast.Interface {
-		log.Fatalf("cannot print %v as %v", typ.Kind, ast.Interface)
+		return fmt.Errorf("cannot print %v as %v", typ.Kind, ast.Interface)
 	}
 
 	sb.WriteString(fmt.Sprintf("interface %s {\n", typ.Name))
 	for _, field := range typ.Fields {
-		printDescription(sb, typ.Description)
+		err := printDescription(sb, typ.Description)
+		if err != nil {
+			return fmt.Errorf("unable to write description for field %s: %w", field.Name, err)
+		}
 		sb.WriteString(fmt.Sprintf("\t%s", field.Name))
 		if len(field.Args) > 0 {
 			sb.WriteString("(\n")
@@ -235,4 +273,6 @@ func printInterface(sb *strings.Builder, typ introspectionTypeDefinition) {
 		sb.WriteString(fmt.Sprintf(": %s\n", introspectionTypeToAstType(field.Type).String()))
 	}
 	sb.WriteString("}")
+
+	return nil
 }

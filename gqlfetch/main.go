@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/suessflorian/gqlfetch"
+	"github.com/seka17/gqlfetch"
 )
 
 const DEFAULT_ENDPOINT = "http://localhost:8080/query"

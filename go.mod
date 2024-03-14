@@ -1,4 +1,4 @@
-module github.com/suessflorian/gqlfetch
+module github.com/seka17/gqlfetch
 
 go 1.17
 

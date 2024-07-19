@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 func strPtr(s string) *string { return &s }

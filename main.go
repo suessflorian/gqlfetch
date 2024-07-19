@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 //go:embed introspect.graphql

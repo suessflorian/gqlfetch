@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -84,5 +85,48 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 		return "", errors.New("encountered the following GraphQL errors: " + strings.Join(errs, ","))
 	}
 
-	return printSchema(schemaResponse.Data.Schema, options.WithoutBuiltins), nil
+	schema := schemaResponse.Data.Schema
+
+	normalizeSchema(&schema)
+
+	return printSchema(schema, options.WithoutBuiltins), nil
+}
+
+func normalizeSchema(schema *introspectionSchema) {
+	schema.Directives = uniqDirectives(schema.Directives)
+}
+
+func uniqDirectives(directives []introspectionDirectiveDefinition) []introspectionDirectiveDefinition {
+	nameToDrctv := map[string][]introspectionDirectiveDefinition{}
+	for _, d := range directives {
+		nameToDrctv[d.Name] = append(nameToDrctv[d.Name], d)
+	}
+
+	for name, directives := range nameToDrctv {
+		uniq := []introspectionDirectiveDefinition{}
+		for _, d := range directives {
+			duplicateFound := false
+			for _, ud := range uniq {
+				if d.Equal(ud) {
+					duplicateFound = true
+					break
+				}
+			}
+			if !duplicateFound {
+				uniq = append(uniq, d)
+			}
+		}
+
+		if len(uniq) > 1 {
+			log.Printf("directives have same name but different propertes: %s", name)
+		}
+
+		nameToDrctv[name] = uniq
+	}
+
+	res := []introspectionDirectiveDefinition{}
+	for _, ds := range nameToDrctv {
+		res = append(res, ds...)
+	}
+	return res
 }

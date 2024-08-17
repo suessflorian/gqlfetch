@@ -3,6 +3,7 @@ package gqlfetch
 import (
 	"encoding/json"
 	"log"
+	"reflect"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -53,6 +54,10 @@ type introspectionDirectiveDefinition struct {
 		Type         *introspectedType `json:"type"`
 		DefaultValue interface{}       `json:"defaultValue"`
 	} `json:"args"`
+}
+
+func (d introspectionDirectiveDefinition) Equal(b introspectionDirectiveDefinition) bool {
+	return reflect.DeepEqual(d, b)
 }
 
 type introspectionInputField struct {

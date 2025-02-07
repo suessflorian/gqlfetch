@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -71,10 +73,17 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unable to download schema: %s", res.Status)
 	}
+	
+	return decodeAndPrintSchema(res.Body, options)
+}
 
+func decodeAndPrintSchema(
+	schema io.Reader,
+	options BuildClientSchemaOptions,
+) (string, error) {
 	var schemaResponse introspectionResults
-	err = json.NewDecoder(res.Body).Decode(&schemaResponse)
-	if err != nil {
+	
+	if err := json.NewDecoder(schema).Decode(&schemaResponse); err != nil {
 		return "", fmt.Errorf("unable to decode schema: %w", err)
 	}
 
@@ -87,6 +96,22 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 	}
 
 	return printSchema(schemaResponse.Data.Schema, options.WithoutBuiltins), nil
+}
+
+func BuildClientSchemaFromFile(
+	ctx context.Context,
+	filePath string,
+	withoutBuiltins bool,
+) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+
+	defer f.Close()
+	return decodeAndPrintSchema(f, BuildClientSchemaOptions{
+		WithoutBuiltins: withoutBuiltins,
+	})
 }
 
 func printSchema(schema introspectionSchema, withoutBuiltins bool) string {

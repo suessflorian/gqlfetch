@@ -2,6 +2,7 @@ package gqlfetch
 
 import (
 	_ "embed"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -120,6 +121,125 @@ func Test_printInterface(t *testing.T) {
 			got := tt.args.sb.String()
 			if got != tt.expect {
 				t.Errorf("printing ast.Interface expect: %v got: %v", tt.expect, got)
+			}
+		})
+	}
+}
+
+func Test_printTypes(t *testing.T) {
+	tests := map[string]struct {
+		typ    introspectionTypeDefinition
+		expect string
+	}{
+		"object with deprecated field": {
+			typ: introspectionTypeDefinition{
+				Kind: ast.Object,
+				Name: "User",
+				Fields: []introspectedTypeField{
+					{
+						Name: "oldField",
+						Type: &introspectedType{
+							Name: strPtr("String"),
+							Kind: OBJECT,
+						},
+						IsDeprecated:      true,
+						DeprecationReason: "Use newField instead",
+					},
+					{
+						Name: "newField",
+						Type: &introspectedType{
+							Name: strPtr("String"),
+							Kind: OBJECT,
+						},
+					},
+				},
+			},
+			expect: `type User {
+	oldField: String @deprecated(reason: "Use newField instead")
+	newField: String
+}
+
+`,
+		},
+		"enum with deprecated value": {
+			typ: introspectionTypeDefinition{
+				Kind: ast.Enum,
+				Name: "Status",
+				EnumValues: json.RawMessage(`[
+					{
+						"name": "OLD",
+						"description": "",
+						"isDeprecated": true,
+						"deprecationReason": "Use NEW instead"
+					},
+					{
+						"name": "NEW",
+						"description": "",
+						"isDeprecated": false,
+						"deprecationReason": null
+					}
+				]`),
+			},
+			expect: `enum Status {
+	OLD @deprecated(reason: "Use NEW instead")
+	NEW
+}
+
+`,
+		},
+		"object with deprecated field without reason": {
+			typ: introspectionTypeDefinition{
+				Kind: ast.Object,
+				Name: "User",
+				Fields: []introspectedTypeField{
+					{
+						Name: "oldField",
+						Type: &introspectedType{
+							Name: strPtr("String"),
+							Kind: OBJECT,
+						},
+						IsDeprecated: true,
+					},
+				},
+			},
+			expect: `type User {
+	oldField: String @deprecated
+}
+
+`,
+		},
+		"enum with deprecated value without reason": {
+			typ: introspectionTypeDefinition{
+				Kind: ast.Enum,
+				Name: "Status",
+				EnumValues: json.RawMessage(`[
+					{
+						"name": "OLD",
+						"description": "",
+						"isDeprecated": true,
+						"deprecationReason": null
+					}
+				]`),
+			},
+			expect: `enum Status {
+	OLD @deprecated
+}
+
+`,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			sb := &strings.Builder{}
+			err := printTypes(sb, []introspectionTypeDefinition{tt.typ}, false)
+			if err != nil {
+				t.Errorf("printTypes() error = %v", err)
+				return
+			}
+			got := sb.String()
+			if got != tt.expect {
+				t.Errorf("printTypes() = %v, want %v", got, tt.expect)
 			}
 		})
 	}

@@ -43,6 +43,13 @@ type introspectedTypeField struct {
 	DeprecationReason interface{}               `json:"deprecationReason"`
 }
 
+type introspectedEnumValue struct {
+	Name              string      `json:"name"`
+	Description       string      `json:"description"`
+	IsDeprecated      bool        `json:"isDeprecated"`
+	DeprecationReason interface{} `json:"deprecationReason"`
+}
+
 type introspectionDirectiveDefinition struct {
 	Name        string                  `json:"name"`
 	Description string                  `json:"description"`

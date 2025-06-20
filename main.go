@@ -73,7 +73,7 @@ func BuildClientSchemaWithOptions(ctx context.Context, options BuildClientSchema
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unable to download schema: %s", res.Status)
 	}
-	
+
 	return decodeAndPrintSchema(res.Body, options)
 }
 
@@ -82,7 +82,7 @@ func decodeAndPrintSchema(
 	options BuildClientSchemaOptions,
 ) (string, error) {
 	var schemaResponse introspectionResults
-	
+
 	if err := json.NewDecoder(schema).Decode(&schemaResponse); err != nil {
 		return "", fmt.Errorf("unable to decode schema: %w", err)
 	}
@@ -208,7 +208,14 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 					}
 					sb.WriteString("\t)")
 				}
-				sb.WriteString(fmt.Sprintf(": %s\n", introspectionTypeToAstType(field.Type).String()))
+				sb.WriteString(fmt.Sprintf(": %s", introspectionTypeToAstType(field.Type).String()))
+				if field.IsDeprecated {
+					sb.WriteString(" @deprecated")
+					if reason, ok := field.DeprecationReason.(string); ok && reason != "" {
+						sb.WriteString(fmt.Sprintf("(reason: \"%s\")", reason))
+					}
+				}
+				sb.WriteString("\n")
 			}
 			sb.WriteString("}")
 
@@ -227,7 +234,7 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 
 		case ast.Enum:
 			sb.WriteString(fmt.Sprintf("enum %s {\n", typ.Name))
-			var enumValues ast.EnumValueList
+			var enumValues []introspectedEnumValue
 			if err := json.Unmarshal(typ.EnumValues, &enumValues); err != nil {
 				return fmt.Errorf("unable to unmarshal enum values for %s: %w", typ.Name, err)
 			}
@@ -236,7 +243,15 @@ func printTypes(sb *strings.Builder, types []introspectionTypeDefinition, withou
 				if err != nil {
 					return fmt.Errorf("unable to write description for enum value %s.%s: %w", typ.Name, value.Name, err)
 				}
-				sb.WriteString(fmt.Sprintf("\t%s\n", value.Name))
+
+				sb.WriteString(fmt.Sprintf("\t%s", value.Name))
+				if value.IsDeprecated {
+					sb.WriteString(" @deprecated")
+					if reason, ok := value.DeprecationReason.(string); ok && reason != "" {
+						sb.WriteString(fmt.Sprintf("(reason: \"%s\")", reason))
+					}
+				}
+				sb.WriteString("\n")
 			}
 			sb.WriteString("}")
 
